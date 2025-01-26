@@ -1,0 +1,189 @@
+📊 Instagram Insights Analysis - SQL Challenge
+Welcome to my Instagram Insights Analysis project! 🚀 I tackled this challenge as part of a virtual internship where I explored and analyzed Instagram performance metrics using SQL.
+This repository contains the following deliverables:
+
+🔍 Project Overview
+This analysis dives into Instagram data to generate key insights for business stakeholders. Using a relational database with tables like dim_date, fact_account, and fact_content,
+I answered a series of analytical questions, including performance breakdowns, engagement trends, and creating reports for decision-making.
+
+📂 Deliverables
+ -> SQL Queries
+
+--------1.Count unique post types: Identify the diversity in content types------------------------------------------------------------------------------------------------------
+  SELECT COUNT(DISTINCT post_type) AS unique_post_types
+  FROM fact_content;
+
+Description:
+This query identifies the diversity in the content types by counting the number of unique post types.
+
+
+--------2.Impressions insights: Get the highest and lowest impressions per post type--------------------------------------------------------------------------------------------
+ SELECT 
+    post_type,
+    MAX(impressions) AS highest_impressions,
+    MIN(impressions) AS lowest_impressions
+FROM fact_content
+GROUP BY post_type;
+
+Description:
+This query provides insights into the highest and lowest impressions for each post type.
+It's valuable for identifying which content types perform better in terms of audience reach.
+
+--------3.Weekend posts in March & April: Filter and export data to CSV---------------------------------------------------------------------------------------------------------
+  SELECT *
+FROM fact_content
+WHERE 
+    Date IN (
+        SELECT Date 
+        FROM dim_dates
+        WHERE 
+            (month_name = 'March' OR month_name = 'April')
+            AND weekday_or_weekend= 'Weekend'
+    );
+
+Description:
+This query filters posts that were published on weekends in the months of March and April.
+It's useful for tracking content performance during weekends for those specific months, potentially highlighting trends in weekend content engagement.
+
+
+--------4.Profile statistics: Monthly totals for profile visits and new followers-----------------------------------------------------------------------------------------------
+  SELECT 
+    d.month_name,
+    SUM(a.profile_visits) AS total_profile_visits,
+    SUM(a.new_followers) AS total_new_followers
+FROM fact_account a
+JOIN dim_dates d ON a.date = d.date
+GROUP BY d.month_name
+ORDER BY d.month_name;
+
+Description:
+This query calculates the total number of profile visits and new followers for each month.
+It helps to track growth and engagement on the profile over time, supporting decisions related to content strategy.
+
+
+---------5.Likes by category in July: Using a CTE to rank categories by total likes---------------------------------------------------------------------------------------------
+  WITH likes_cte AS (
+    SELECT 
+        post_category,
+        SUM(likes) AS total_likes
+    FROM fact_content
+    WHERE 
+        Date IN (
+            SELECT Date 
+            FROM dim_dates
+            WHERE month_name = 'July'
+        )
+    GROUP BY post_category
+)
+SELECT * 
+FROM likes_cte
+ORDER BY total_likes DESC;
+
+Description:
+This query uses a Common Table Expression (CTE) to first calculate the total likes per post category in July.
+It ranks these categories in descending order of likes, offering insights into the most engaging content categories.
+
+
+----------6.Monthly post categories: Unique category counts per month------------------------------------------------------------------------------------------------------------
+  SELECT 
+    d.month_name,
+    GROUP_CONCAT(DISTINCT fc.post_category ORDER BY fc.post_category ASC) AS post_category_names,
+    COUNT(DISTINCT fc.post_category) AS post_category_count
+FROM fact_content fc
+JOIN dim_dates d ON fc.date = d.date
+GROUP BY d.month_name
+ORDER BY d.month_name;
+
+Description:
+This query groups the posts by month and lists the unique categories for each month. It also counts the number of unique categories,
+providing an overview of the content diversity for each month.
+
+
+----------7.Reach percentage: Breakdown of total reach by post type---------------------------------------------------------------------------------------------------------------
+  WITH reach_cte AS (
+    SELECT 
+        post_type,
+        SUM(reach) AS total_reach
+    FROM fact_content
+    GROUP BY post_type
+)
+SELECT 
+    post_type,
+    total_reach,
+    ROUND((total_reach * 100.0 / SUM(total_reach) OVER ()), 2) AS reach_percentage
+FROM reach_cte;
+
+
+Description:
+This query calculates the total reach by post type and then computes the percentage of total reach for each post type.
+It's useful for understanding the contribution of each post type to overall reach.
+
+
+-----------8.Quarterly analysis: Comments and saves by post category for each quarter---------------------------------------------------------------------------------------------
+  SELECT 
+    fc.post_category,
+    CASE 
+        WHEN d.month_name IN ('January', 'February', 'March') THEN 'Q1'
+        WHEN d.month_name IN ('April', 'May', 'June') THEN 'Q2'
+        WHEN d.month_name IN ('July', 'August', 'September') THEN 'Q3'
+        ELSE 'Q4'
+    END AS quarter,
+    SUM(fc.comments) AS total_comments,
+    SUM(fc.saves) AS total_saves
+FROM fact_content fc
+JOIN dim_dates d ON fc.date = d.date
+GROUP BY fc.post_category, quarter;
+
+Description:
+This query performs a quarterly analysis of posts by category. It sums the total comments and saves for each post category across different quarters,
+providing insights into audience engagement with specific categories throughout the year.
+
+
+-----------9.Top 3 follower growth dates: Identify peak follower growth per month--------------------------------------------------------------------------------------------------
+  WITH rank_cte AS (
+    SELECT 
+        d.month_name,
+        a.date,
+        a.new_followers,
+        RANK() OVER (PARTITION BY d.month_name ORDER BY a.new_followers DESC) AS `rank`
+    FROM fact_account a
+    JOIN dim_dates d ON a.date = d.date
+)
+SELECT month_name, date, new_followers
+FROM rank_cte
+WHERE `rank` <= 3;
+
+
+Description:
+This query identifies the top 3 days with the highest new followers for each month. It helps track peak days of follower growth,
+allowing stakeholders to pinpoint effective strategies or actions.
+
+
+------------10.Stored procedure: Generate weekly reports for total shares by post type-----------------------------------------------------------------------------------------------
+  DELIMITER $$
+
+CREATE PROCEDURE GetTotalSharesByWeek(IN Week_no INT)
+BEGIN
+    SELECT 
+        post_type,
+        SUM(shares) AS total_shares
+    FROM fact_content
+    WHERE 
+        Date IN (
+            SELECT Date
+            FROM dim_dates
+            WHERE week_no = Week_no
+        )
+    GROUP BY post_type;
+END$$
+
+DELIMITER ;
+
+CALL GetTotalSharesByWeek(1);
+
+
+Description:
+This stored procedure generates a weekly report of total shares by post type.
+You can specify the week number (e.g., Week_no = 1) to get shares for a specific week.
+It enables periodic analysis of content sharing activity across different post types.
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
